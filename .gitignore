@@ -1,0 +1,10 @@
+# build outputs
+*.exe
+*.out
+rps
+
+# data outputs
+data/*.csv
+
+# editor
+.vscode/
