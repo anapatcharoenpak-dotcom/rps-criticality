@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <iomanip>
+#include <cstdint>
 
 #include "graph.hpp"
 #include "rng.hpp"
@@ -16,7 +17,7 @@ static inline const char* species_name(int s) {
     if (s == (int)ROCK) return "R";
     if (s == (int)PAPER) return "P";
     if (s == (int)SCISSORS) return "S";
-    return "NA";
+    return "NA"; // includes s == -1 (censored)
 }
 
 int main(int argc, char** argv) {
@@ -27,18 +28,19 @@ int main(int argc, char** argv) {
               << "  " << argv[0] << " graph_type size_param degree_param beta k reps seed out_csv\n"
               << "Examples:\n"
               << "  " << argv[0] << " lattice2D 50 0 0.0 1.0 200 12345 data/out.csv\n"
-              << "  " << argv[0] << " smallworld 2500 4 0.10 1.0 200 12345 data/out.csv\n";
+              << "  " << argv[0] << " smallworld 2500 4 0.10 1.0 200 12345 data/out.csv\n"
+              << "  " << argv[0] << " scalefree 2500 2 0.0 1.0 200 12345 data/out.csv\n";
             return 1;
         }
 
-        std::string graph_type = argv[1];
-        int size_param = std::stoi(argv[2]);
-        int degree_param = std::stoi(argv[3]);
-        double beta = std::stod(argv[4]);
-        double k = std::stod(argv[5]);
-        int reps = std::stoi(argv[6]);
-        uint64_t base_seed = (uint64_t)std::stoull(argv[7]);
-        std::string out_csv = argv[8];
+        const std::string graph_type = argv[1];
+        const int size_param = std::stoi(argv[2]);
+        const int degree_param = std::stoi(argv[3]);
+        const double beta = std::stod(argv[4]);
+        const double k = std::stod(argv[5]);
+        const int reps = std::stoi(argv[6]);
+        const uint64_t base_seed = (uint64_t)std::stoull(argv[7]);
+        const std::string out_csv = argv[8];
 
         Graph g;
         int L = 0;
@@ -50,24 +52,35 @@ int main(int argc, char** argv) {
             g = build_lattice2D(L);
             K = 4;
             used_beta = 0.0;
+
         } else if (graph_type == "smallworld") {
-            int N = size_param;
+            const int N = size_param;
             K = degree_param;
             used_beta = beta;
             RNG rng_graph(base_seed ^ 0x9e3779b97f4a7c15ULL);
             g = build_watts_strogatz(N, K, used_beta, rng_graph);
-        } else if (graph_type == "scalefree") {
-            int N = size_param;
-            int m  = degree_param;  // interpret degree_param as "m"
-            int m0 = 2 * m;         // simple default (you can change later)
-            used_beta = 0.0;        // not used
-            K = m;                  // store m in K column for reference
 
+        } else if (graph_type == "scalefree") {
+            const int N = size_param;
+            const int m = degree_param; // interpret degree_param as "m"
+            const int m0 = 2 * m;       // simple default
+            used_beta = 0.0;            // not used
+            K = m;                      // store m in K column for reference
             RNG rng_graph(base_seed ^ 0xD1B54A32D192ED03ULL);
             g = build_barabasi_albert(N, m0, m, rng_graph);
+
         } else {
-            throw std::runtime_error("Unknown graph_type. Use lattice2D or smallworld.");
+            throw std::runtime_error("Unknown graph_type. Use lattice2D, smallworld, or scalefree.");
         }
+
+        // ---------- CAP SETTINGS ----------
+        // Cap in Monte Carlo steps (MCS). If <=0, no cap.
+        constexpr long long MAX_MCS = 50000; // <-- only change this number
+        const long long max_attempts = (MAX_MCS > 0) ? MAX_MCS * (long long)g.N : -1;
+        // ----------------------------------
+
+        const int outL = (graph_type == "lattice2D") ? L : 0;
+        const int N = g.N;
 
         // Check if file exists to write header once
         bool file_exists = false;
@@ -79,28 +92,36 @@ int main(int argc, char** argv) {
         std::ofstream fout(out_csv, std::ios::app);
         if (!fout) throw std::runtime_error("Cannot open output file.");
 
+        // Set numeric formatting ONCE (clean + slightly faster)
+        fout.setf(std::ios::fixed);
+        fout << std::setprecision(6);
+
         if (!file_exists) {
-            fout << "graph,L,N,K,beta,k,rep,seed,Text_attempts,Text_mcs,extinct\n";
+            fout << "graph,L,N,K,beta,k,rep,seed,max_mcs,censored,Text_attempts,Text_mcs,extinct\n";
         }
 
         for (int rep = 0; rep < reps; ++rep) {
-            uint64_t seed = base_seed + (uint64_t)rep * 1315423911ULL;
+            const uint64_t seed =
+                (base_seed ^ 0xA5A5A5A5A5A5A5A5ULL) + (uint64_t)rep * 1315423911ULL;
 
             RPS_Sim sim(g, seed, k);
             sim.init_random_equal();
-            // cap attempts for quick debugging: e.g. 2e7 attempts
-            SimResult res = sim.run_until_extinction(20000000LL);
+
+            SimResult res = sim.run_until_extinction(max_attempts);
+            const int censored = (res.extinct == -1) ? 1 : 0;
 
             fout << g.name << ","
-                 << ((graph_type == "lattice2D") ? L : 0) << ","
-                 << g.N << ","
+                 << outL << ","
+                 << N << ","
                  << K << ","
-                 << std::fixed << std::setprecision(6) << used_beta << ","
-                 << std::fixed << std::setprecision(6) << k << ","
+                 << used_beta << ","
+                 << k << ","
                  << rep << ","
                  << seed << ","
+                 << MAX_MCS << ","
+                 << censored << ","
                  << res.Text_attempts << ","
-                 << std::fixed << std::setprecision(6) << res.Text_mcs << ","
+                 << res.Text_mcs << ","
                  << species_name(res.extinct)
                  << "\n";
         }
