@@ -10,6 +10,7 @@
 // Forward declarations from graph_builders.cpp
 Graph build_lattice2D(int L);
 Graph build_watts_strogatz(int N, int K, double beta, RNG& rng);
+Graph build_barabasi_albert(int N, int m0, int m, RNG& rng);
 
 static inline const char* species_name(int s) {
     if (s == (int)ROCK) return "R";
@@ -55,6 +56,15 @@ int main(int argc, char** argv) {
             used_beta = beta;
             RNG rng_graph(base_seed ^ 0x9e3779b97f4a7c15ULL);
             g = build_watts_strogatz(N, K, used_beta, rng_graph);
+        } else if (graph_type == "scalefree") {
+            int N = size_param;
+            int m  = degree_param;  // interpret degree_param as "m"
+            int m0 = 2 * m;         // simple default (you can change later)
+            used_beta = 0.0;        // not used
+            K = m;                  // store m in K column for reference
+
+            RNG rng_graph(base_seed ^ 0xD1B54A32D192ED03ULL);
+            g = build_barabasi_albert(N, m0, m, rng_graph);
         } else {
             throw std::runtime_error("Unknown graph_type. Use lattice2D or smallworld.");
         }
