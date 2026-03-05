@@ -86,14 +86,23 @@ SimResult RPS_Sim::run_until_extinction(long long max_attempts) {
     }
 
     long long attempts = 0;
+
     while (!extinct()) {
         step_attempt();
         attempts++;
-        if (max_attempts > 0 && attempts >= max_attempts) break;
+
+        if (max_attempts > 0 && attempts >= max_attempts) {
+            // extinction not reached within limit
+            out.Text_attempts = attempts;
+            out.Text_mcs = (double)attempts / (double)g.N;
+            out.extinct = -1;  // special flag: not extinct
+            return out;
+        }
     }
 
+    // extinction reached normally
     out.Text_attempts = attempts;
-    out.Text_mcs = (double)attempts / (double)g.N; // 1 MCS = N attempts
+    out.Text_mcs = (double)attempts / (double)g.N;
     out.extinct = extinct_species();
     return out;
 }

@@ -88,7 +88,8 @@ int main(int argc, char** argv) {
 
             RPS_Sim sim(g, seed, k);
             sim.init_random_equal();
-            SimResult res = sim.run_until_extinction();
+            // cap attempts for quick debugging: e.g. 2e7 attempts
+            SimResult res = sim.run_until_extinction(20000000LL);
 
             fout << g.name << ","
                  << ((graph_type == "lattice2D") ? L : 0) << ","
