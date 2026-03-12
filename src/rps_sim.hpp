@@ -31,7 +31,7 @@ struct RPS_Sim {
     RPS_Sim(const Graph& graph, uint64_t seed, double k);
     RPS_Sim(const Graph& graph, uint64_t seed, double kR_, double kP_, double kS_);
 
-    void init_random_equal();
+    void init_random_uniform();
 
     SimResult run_until_extinction(long long max_attempts = -1);
 

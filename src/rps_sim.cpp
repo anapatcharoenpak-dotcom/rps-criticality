@@ -7,23 +7,24 @@ RPS_Sim::RPS_Sim(const Graph& graph, uint64_t seed, double k)
 RPS_Sim::RPS_Sim(const Graph& graph, uint64_t seed, double kR_, double kP_, double kS_)
     : g(graph), rng(seed), state(graph.N, 0), kR(kR_), kP(kP_), kS(kS_) {}
 
-void RPS_Sim::init_random_equal() {
+void RPS_Sim::init_random_uniform() {
     int N = g.N;
-    int base = N / 3;
-    int rem  = N % 3;
 
-    nR = base; nP = base; nS = base;
-    if (rem >= 1) nR++;
-    if (rem >= 2) nP++;
+    nR = 0;
+    nP = 0;
+    nS = 0;
 
-    std::vector<uint8_t> tmp;
-    tmp.reserve(N);
-    tmp.insert(tmp.end(), nR, (uint8_t)ROCK);
-    tmp.insert(tmp.end(), nP, (uint8_t)PAPER);
-    tmp.insert(tmp.end(), nS, (uint8_t)SCISSORS);
+    state.resize(N);
 
-    rng.shuffle(tmp);
-    state = std::move(tmp);
+    for (int i = 0; i < N; ++i) {
+        int x = rng.randint(0, 2); // 0,1,2 with uniform probability
+
+        state[i] = (uint8_t)x;
+
+        if (x == (int)ROCK) nR++;
+        else if (x == (int)PAPER) nP++;
+        else nS++;
+    }
 }
 
 inline double RPS_Sim::invasion_rate(Species winner) const {

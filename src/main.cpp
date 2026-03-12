@@ -122,7 +122,15 @@ int main(int argc, char** argv) {
                 (base_seed ^ 0xA5A5A5A5A5A5A5A5ULL) + (uint64_t)rep * 1315423911ULL;
 
             RPS_Sim sim(g, seed, k);
-            sim.init_random_equal();
+            sim.init_random_uniform();
+            
+            /*
+            std::cout << "rep=" << rep
+              << " nR=" << sim.nR
+              << " nP=" << sim.nP
+              << " nS=" << sim.nS
+              << "\n";
+            */ // sanity check for initial randomization (maximum entropy)
 
             SimResult res = sim.run_until_extinction(max_attempts);
             const int censored = (res.extinct == -1) ? 1 : 0;
