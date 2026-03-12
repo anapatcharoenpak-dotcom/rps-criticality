@@ -57,7 +57,7 @@ inline int RPS_Sim::extinct_species() const {
 }
 
 // One update attempt: choose reference node i, choose neighbor j, apply pairwise invasion
-inline void RPS_Sim::step_attempt() {
+void RPS_Sim::step_attempt() {
     int i = rng.randint(0, g.N - 1);
     const auto& nb = g.neighbors(i);
     int j = nb[rng.randint(0, (int)nb.size() - 1)];

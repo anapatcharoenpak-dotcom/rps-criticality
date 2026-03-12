@@ -40,5 +40,5 @@ private:
     inline void apply_replace(int loser_idx, Species loser, Species winner);
     inline bool extinct() const;
     inline int extinct_species() const;
-    inline void step_attempt();
+    void step_attempt();
 };
