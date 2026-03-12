@@ -20,6 +20,20 @@ static inline const char* species_name(int s) {
     return "NA"; // includes s == -1 (censored)
 }
 
+void print_graph(const Graph& g) {
+    std::cout << "Graph: " << g.name << ", N = " << g.N << "\n";
+
+    for (int i = 0; i < g.N; ++i) {
+        std::cout << i << " : ";
+
+        for (int v : g.adj[i]) {
+            std::cout << v << " ";
+        }
+
+        std::cout << "(deg=" << g.adj[i].size() << ")\n";
+    }
+}
+
 int main(int argc, char** argv) {
     try {
         if (argc < 9) {
@@ -72,6 +86,9 @@ int main(int argc, char** argv) {
         } else {
             throw std::runtime_error("Unknown graph_type. Use lattice2D, smallworld, or scalefree.");
         }
+
+        print_graph(g);
+
 
         // ---------- CAP SETTINGS ----------
         // Cap in Monte Carlo steps (MCS). If <=0, no cap.
