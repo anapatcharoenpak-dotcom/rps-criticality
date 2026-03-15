@@ -1,0 +1,19 @@
+Convergence slope summary
+=========================
+Each point is smoothed over the same fixed ensemble of 10 realizations.
+Reference Monte Carlo scaling: percent error ~ reps^(-1/2), so slope ~ -0.5 on a log-log plot.
+
+Case: lattice2D
+  ensemble size : 10
+  unconditional : slope = -0.458607, intercept = 1.873951, points used = 25
+  conditional   : slope = -0.473640, intercept = 1.800793, points used = 25
+
+Case: smallworld
+  ensemble size : 10
+  unconditional : slope = -0.490319, intercept = 1.945239, points used = 25
+  conditional   : slope = -0.459110, intercept = 1.743702, points used = 25
+
+Case: scalefree
+  ensemble size : 10
+  unconditional : slope = -0.519106, intercept = 1.981259, points used = 25
+  conditional   : slope = -0.496172, intercept = 1.825304, points used = 25
