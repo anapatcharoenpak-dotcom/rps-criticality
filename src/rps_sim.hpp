@@ -36,9 +36,9 @@ struct RPS_Sim {
     SimResult run_until_extinction(long long max_attempts = -1);
 
 private:
-    inline double invasion_rate(Species winner) const;
-    inline void apply_replace(int loser_idx, Species loser, Species winner);
+    inline double invasion_rate(uint8_t winner) const;
+    inline bool apply_replace(int loser_idx, uint8_t loser, uint8_t winner);
     inline bool extinct() const;
     inline int extinct_species() const;
-    void step_attempt();
+    bool step_attempt();
 };

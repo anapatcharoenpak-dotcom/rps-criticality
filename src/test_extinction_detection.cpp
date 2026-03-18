@@ -48,10 +48,11 @@ static std::string counts_string(const RPS_Sim& sim) {
 // Test 1: extinction condition should trigger iff one species count is zero.
 static TestResult test_extinction_condition(const Graph& g) {
     RPS_Sim sim(g, 12345ULL, 1.0);
+    RPS_Sim frozen(g, 12345ULL, 0.0);
 
     // Case A: no species extinct
-    set_state_and_counts(sim, {ROCK, PAPER, SCISSORS, ROCK});
-    SimResult a = sim.run_until_extinction(1); // one attempt only, enough to probe the initial condition
+    set_state_and_counts(frozen, {ROCK, PAPER, SCISSORS, ROCK});
+    SimResult a = frozen.run_until_extinction(1); // frozen dynamics isolates the initial-condition check
     bool okA = (a.extinct == -1); // should not be instantly classified as extinct
 
     // Case B: R extinct

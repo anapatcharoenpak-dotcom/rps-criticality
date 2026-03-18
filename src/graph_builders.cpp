@@ -1,12 +1,29 @@
 #include "graph.hpp"
 #include "rng.hpp"
 
-#include <unordered_set>
+#include <algorithm>
 #include <stdexcept>
+#include <utility>
+#include <vector>
+
+namespace {
+
+inline bool contains_neighbor(const std::vector<int>& nb, int x) {
+    return std::find(nb.begin(), nb.end(), x) != nb.end();
+}
+
+inline void erase_neighbor(std::vector<int>& nb, int x) {
+    auto it = std::find(nb.begin(), nb.end(), x);
+    if (it == nb.end()) return;
+    *it = nb.back();
+    nb.pop_back();
+}
+
+} // namespace
 
 // 2D periodic lattice LxL (von Neumann 4-neighbor)
 Graph build_lattice2D(int L) {
-    int N = L * L;
+    const int N = L * L;
     Graph g(N);
     g.name = "lattice2D";
 
@@ -18,11 +35,13 @@ Graph build_lattice2D(int L) {
 
     for (int y = 0; y < L; ++y) {
         for (int x = 0; x < L; ++x) {
-            int u = idx(x, y);
-            g.add_edge_undirected(u, idx(x + 1, y));
-            g.add_edge_undirected(u, idx(x - 1, y));
-            g.add_edge_undirected(u, idx(x, y + 1));
-            g.add_edge_undirected(u, idx(x, y - 1));
+            const int u = idx(x, y);
+            auto& nb = g.adj[u];
+            nb.reserve(4);
+            nb.push_back(idx(x + 1, y));
+            nb.push_back(idx(x - 1, y));
+            nb.push_back(idx(x, y + 1));
+            nb.push_back(idx(x, y - 1));
         }
     }
 
@@ -30,66 +49,62 @@ Graph build_lattice2D(int L) {
     return g;
 }
 
-// Watts–Strogatz small-world:
-// start ring lattice (degree K even), rewire forward edges with prob beta
+// Degree-preserving small-world builder:
+// start from a K-regular ring lattice, then randomize via edge swaps.
 Graph build_watts_strogatz(int N, int K, double beta, RNG& rng) {
-    if (K % 2 != 0) throw std::runtime_error("Watts–Strogatz requires even K.");
-    if (K >= N) throw std::runtime_error("Watts–Strogatz requires K < N.");
+    if (K % 2 != 0) throw std::runtime_error("Watts-Strogatz requires even K.");
+    if (K >= N) throw std::runtime_error("Watts-Strogatz requires K < N.");
 
     Graph g(N);
     g.name = "smallworld";
+    for (int i = 0; i < N; ++i) g.adj[i].reserve(K);
 
-    std::vector<std::unordered_set<int>> nbset(N);
+    const int half = K / 2;
+    std::vector<std::pair<int, int>> forward_edges;
+    forward_edges.reserve(static_cast<std::size_t>(N) * static_cast<std::size_t>(half));
 
-    auto add_undirected_set = [&](int u, int v) {
-        if (u == v) return;
-        nbset[u].insert(v);
-        nbset[v].insert(u);
-    };
-
-    int half = K / 2;
-
-    // ring lattice
     for (int u = 0; u < N; ++u) {
         for (int d = 1; d <= half; ++d) {
-            int v = (u + d) % N;
-            add_undirected_set(u, v);
+            const int v = (u + d) % N;
+            g.add_edge_undirected(u, v);
+            forward_edges.push_back({u, v});
         }
     }
 
-    // rewire forward edges
-    for (int u = 0; u < N; ++u) {
-        for (int d = 1; d <= half; ++d) {
-            int v = (u + d) % N;
-            if (!nbset[u].count(v)) continue;
+    for (std::size_t edge_idx = 0; edge_idx < forward_edges.size(); ++edge_idx) {
+        if (rng.u01() >= beta) continue;
 
-            if (rng.u01() < beta) {
-                // remove (u,v)
-                nbset[u].erase(v);
-                nbset[v].erase(u);
+        const int u = forward_edges[edge_idx].first;
+        const int v = forward_edges[edge_idx].second;
 
-                // choose new w
-                int w;
-                int guard = 0;
-                do {
-                    w = rng.randint(0, N - 1);
-                    guard++;
-                    if (guard > 10 * N) { w = v; break; }
-                } while (w == u || nbset[u].count(w));
+        int guard = 0;
+        while (guard++ < 10 * N) {
+            const std::size_t swap_idx =
+                static_cast<std::size_t>(rng.randint(0, static_cast<int>(forward_edges.size()) - 1));
+            if (swap_idx == edge_idx) continue;
 
-                add_undirected_set(u, w);
-            }
+            const int x = forward_edges[swap_idx].first;
+            const int y = forward_edges[swap_idx].second;
+
+            if (u == x || u == y || v == x || v == y) continue;
+            if (contains_neighbor(g.adj[u], y) || contains_neighbor(g.adj[x], v)) continue;
+
+            erase_neighbor(g.adj[u], v);
+            erase_neighbor(g.adj[v], u);
+            erase_neighbor(g.adj[x], y);
+            erase_neighbor(g.adj[y], x);
+
+            g.add_edge_undirected(u, y);
+            g.add_edge_undirected(x, v);
+
+            forward_edges[edge_idx] = {u, y};
+            forward_edges[swap_idx] = {x, v};
+            break;
         }
     }
 
-    // convert to adjacency list
-    for (int i = 0; i < N; ++i) {
-        g.adj[i].reserve(nbset[i].size());
-        for (int v : nbset[i]) g.adj[i].push_back(v);
-    }
     g.finalize_simple();
 
-    // safety: no isolated nodes
     for (int i = 0; i < N; ++i) {
         if (g.adj[i].empty()) throw std::runtime_error("Isolated node generated; adjust parameters.");
     }
@@ -97,7 +112,7 @@ Graph build_watts_strogatz(int N, int K, double beta, RNG& rng) {
     return g;
 }
 
-// --- Scale-free network: Barabási–Albert (preferential attachment) ---
+// --- Scale-free network: Barabasi-Albert (preferential attachment) ---
 // Parameters:
 //   N  : total nodes
 //   m0 : initial fully-connected core size (>=2)
@@ -105,7 +120,7 @@ Graph build_watts_strogatz(int N, int K, double beta, RNG& rng) {
 //
 // Implementation notes:
 // - Undirected graph.
-// - Uses "repeated nodes" method to sample proportional to degree.
+// - Uses the repeated-nodes method to sample proportional to degree.
 // - No self-loops, no multi-edges.
 Graph build_barabasi_albert(int N, int m0, int m, RNG& rng) {
     if (N <= 0) throw std::runtime_error("BA: N must be > 0");
@@ -116,76 +131,53 @@ Graph build_barabasi_albert(int N, int m0, int m, RNG& rng) {
 
     Graph g(N);
     g.name = "scalefree";
+    for (int u = 0; u < m0; ++u) g.adj[u].reserve(m0 - 1);
 
-    // Use sets during construction to avoid duplicate edges easily.
-    std::vector<std::unordered_set<int>> nbset(N);
-
-    auto add_edge_set = [&](int u, int v) {
-        if (u == v) return false;
-        if (nbset[u].count(v)) return false;
-        nbset[u].insert(v);
-        nbset[v].insert(u);
-        return true;
-    };
-
-    // 1) Initial complete graph on m0 nodes
     for (int u = 0; u < m0; ++u) {
         for (int v = u + 1; v < m0; ++v) {
-            add_edge_set(u, v);
+            g.add_edge_undirected(u, v);
         }
     }
 
-    // 2) "Repeated nodes" list for preferential sampling
-    // Each node appears in the list proportional to its current degree.
     std::vector<int> repeated;
-    repeated.reserve(2 * N * m);
+    repeated.reserve(static_cast<std::size_t>(2) * static_cast<std::size_t>(N) * static_cast<std::size_t>(m));
 
-    // Initialize repeated list from the complete graph
     for (int u = 0; u < m0; ++u) {
-        int deg = (int)nbset[u].size(); // should be m0-1
-        for (int k = 0; k < deg; ++k) repeated.push_back(u);
+        for (int k = 0; k < m0 - 1; ++k) repeated.push_back(u);
     }
 
-    // 3) Add new nodes one by one
     for (int new_node = m0; new_node < N; ++new_node) {
-        std::unordered_set<int> targets;
+        std::vector<int> targets;
+        g.adj[new_node].reserve(m);
         targets.reserve(m * 2);
 
-        // Select m distinct existing nodes with probability ~ degree
         int guard = 0;
         while ((int)targets.size() < m) {
+            int pick;
             if (repeated.empty()) {
-                // Should not happen, but safeguard
-                int fallback = rng.randint(0, new_node - 1);
-                if (fallback != new_node) targets.insert(fallback);
+                pick = rng.randint(0, new_node - 1);
             } else {
-                int pick = repeated[rng.randint(0, (int)repeated.size() - 1)];
-                if (pick != new_node) targets.insert(pick);
+                pick = repeated[rng.randint(0, (int)repeated.size() - 1)];
             }
+
+            if (pick != new_node && std::find(targets.begin(), targets.end(), pick) == targets.end()) {
+                targets.push_back(pick);
+            }
+
             guard++;
             if (guard > 1000000) throw std::runtime_error("BA: selection guard triggered (unexpected).");
         }
 
-        // Add edges from new_node to chosen targets
         for (int t : targets) {
-            add_edge_set(new_node, t);
+            g.add_edge_undirected(new_node, t);
         }
 
-        // Update repeated list:
-        // - new node appears deg(new_node)=m times
-        // - each target gains +1 degree => add target once
         for (int k = 0; k < m; ++k) repeated.push_back(new_node);
         for (int t : targets) repeated.push_back(t);
     }
 
-    // Convert nbset -> adjacency list
-    for (int i = 0; i < N; ++i) {
-        g.adj[i].reserve(nbset[i].size());
-        for (int v : nbset[i]) g.adj[i].push_back(v);
-    }
     g.finalize_simple();
 
-    // Basic safety: no isolated nodes (BA should not create isolated nodes if m>=1)
     for (int i = 0; i < N; ++i) {
         if (g.adj[i].empty()) {
             throw std::runtime_error("BA: isolated node found; check parameters.");

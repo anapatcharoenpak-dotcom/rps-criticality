@@ -57,41 +57,36 @@ def fit_slope(rows, ykey):
 
 
 def make_plot(grouped, ykey, skey, ylabel, title, output_path):
-    plt.figure(figsize=(8.8, 5.8))
+    plt.figure(figsize=(9.2, 6.0))
     for case_key, rows in grouped.items():
-        xs = [r["reps"] for r in rows if r[ykey] > 0.0]
-        ys = [r[ykey] for r in rows if r[ykey] > 0.0]
-        stds = [r[skey] for r in rows if r[ykey] > 0.0]
-        plt.plot(xs, ys, marker="o", linewidth=1.7, label=case_key)
+        kept = [r for r in rows if r[ykey] > 0.0]
+        xs = [r["reps"] for r in kept]
+        ys = [r[ykey] for r in kept]
+        stds = [r[skey] for r in kept]
+        plt.plot(xs, ys, marker="o", markersize=3.5, linewidth=1.6, label=case_key)
 
         lower = [max(1e-12, y - s) for y, s in zip(ys, stds)]
         upper = [max(1e-12, y + s) for y, s in zip(ys, stds)]
         plt.fill_between(xs, lower, upper, alpha=0.18)
 
         fit = fit_slope(rows, ykey)
-        if fit is not None:
+        if fit is not None and xs:
             slope, intercept, _ = fit
-            xfit = xs
-            yfit = [10 ** (intercept + slope * math.log10(x)) for x in xfit]
-            plt.plot(xfit, yfit, linestyle="--", linewidth=1.2, label=f"{case_key} fit ({slope:.3f})")
+            yfit = [10 ** (intercept + slope * math.log10(x)) for x in xs]
+            plt.plot(xs, yfit, linestyle="--", linewidth=1.1, label=f"{case_key} fit ({slope:.3f})")
 
     plt.xscale("log")
     plt.yscale("log")
-
-    # restrict axis window
-    plt.xlim(1e3, 1e5)
+    plt.xlim(1e3, 1e6)
     plt.ylim(1e-1, 1e1)
-    plt.xticks([1e3,1e4,1e5])
-    plt.yticks([1e-1,1e0,1e1])
-
     plt.xlabel("Monte Carlo repetitions")
     plt.ylabel(ylabel)
     plt.title(title)
     plt.grid(True, which="both", linestyle="--", alpha=0.45)
     plt.legend()
     plt.tight_layout()
+    plt.savefig(output_path, dpi=200)
     plt.savefig(output_path.with_suffix(".pdf"))
-    plt.savefig(output_path.with_suffix(".png"), dpi=300)
     plt.close()
 
 
@@ -99,7 +94,7 @@ def write_summary(grouped, path: Path):
     lines = []
     lines.append("Convergence slope summary")
     lines.append("=========================")
-    lines.append("Each point is smoothed over the same fixed ensemble of 10 realizations.")
+    lines.append("Schedule: 10^3, 10^3.05, ..., 10^6")
     lines.append("Reference Monte Carlo scaling: percent error ~ reps^(-1/2), so slope ~ -0.5 on a log-log plot.")
     lines.append("")
     for case_key, rows in grouped.items():
@@ -117,6 +112,9 @@ def write_summary(grouped, path: Path):
 
 
 def main():
+    if not INPUT_CSV.exists():
+        raise FileNotFoundError(f"CSV not found: {INPUT_CSV.resolve()}")
+
     rows = load_rows(INPUT_CSV)
     grouped = group_rows(rows)
 

@@ -3,6 +3,10 @@
 #include <string>
 #include <iomanip>
 #include <cstdint>
+#include <thread>
+#include <vector>
+#include <algorithm>
+#include <cstdlib>
 
 #include "graph.hpp"
 #include "rng.hpp"
@@ -34,16 +38,40 @@ void print_graph(const Graph& g) {
     }
 }
 
+struct RepRecord {
+    uint64_t seed = 0;
+    SimResult result;
+};
+
+static bool should_print_graph() {
+    const char* env = std::getenv("RPS_PRINT_GRAPH");
+    return env != nullptr && env[0] != '\0' && env[0] != '0';
+}
+
+static unsigned int pick_thread_count(int reps, unsigned int requested_threads) {
+    const unsigned int rep_limit = (reps > 0) ? static_cast<unsigned int>(reps) : 1u;
+
+    if (requested_threads > 0) {
+        return std::max(1u, std::min(requested_threads, rep_limit));
+    }
+
+    const unsigned int hw = std::thread::hardware_concurrency();
+    const unsigned int fallback = (hw == 0) ? 1u : hw;
+    return std::max(1u, std::min(fallback, rep_limit));
+}
+
 int main(int argc, char** argv) {
     try {
-        if (argc < 9) {
+        if (argc < 9 || argc > 11) {
             std::cerr
               << "Usage:\n"
-              << "  " << argv[0] << " graph_type size_param degree_param beta k reps seed out_csv\n"
+              << "  " << argv[0] << " graph_type size_param degree_param beta k reps seed out_csv [max_mcs] [threads]\n"
               << "Examples:\n"
               << "  " << argv[0] << " lattice2D 50 0 0.0 1.0 200 12345 data/out.csv\n"
               << "  " << argv[0] << " smallworld 2500 4 0.10 1.0 200 12345 data/out.csv\n"
-              << "  " << argv[0] << " scalefree 2500 2 0.0 1.0 200 12345 data/out.csv\n";
+              << "  " << argv[0] << " scalefree 2500 2 0.0 1.0 200 12345 data/out.csv\n"
+              << "Optional:\n"
+              << "  max_mcs <= 0 means uncapped; threads = 0 means auto\n";
             return 1;
         }
 
@@ -55,6 +83,12 @@ int main(int argc, char** argv) {
         const int reps = std::stoi(argv[6]);
         const uint64_t base_seed = (uint64_t)std::stoull(argv[7]);
         const std::string out_csv = argv[8];
+        const long long max_mcs = (argc >= 10) ? std::stoll(argv[9]) : 0LL;
+        const unsigned int requested_threads = (argc >= 11) ? (unsigned int)std::stoul(argv[10]) : 0u;
+
+        if (reps < 0) {
+            throw std::runtime_error("reps must be >= 0.");
+        }
 
         Graph g;
         int L = 0;
@@ -87,17 +121,19 @@ int main(int argc, char** argv) {
             throw std::runtime_error("Unknown graph_type. Use lattice2D, smallworld, or scalefree.");
         }
 
-        print_graph(g);
+        if (should_print_graph()) {
+            print_graph(g);
+        }
 
 
         // ---------- CAP SETTINGS ----------
         // Cap in Monte Carlo steps (MCS). If <=0, no cap.
-        constexpr long long MAX_MCS = 50000; // <-- only change this number
-        const long long max_attempts = (MAX_MCS > 0) ? MAX_MCS * (long long)g.N : -1;
+        const long long max_attempts = (max_mcs > 0) ? max_mcs * (long long)g.N : -1;
         // ----------------------------------
 
         const int outL = (graph_type == "lattice2D") ? L : 0;
         const int N = g.N;
+        const unsigned int thread_count = pick_thread_count(reps, requested_threads);
 
         // Check if file exists to write header once
         bool file_exists = false;
@@ -117,24 +153,41 @@ int main(int argc, char** argv) {
             fout << "graph,L,N,K,beta,k,rep,seed,max_mcs,censored,Text_attempts,Text_mcs,extinct\n";
         }
 
-        for (int rep = 0; rep < reps; ++rep) {
+        std::cout << "Graph built: " << g.name
+                  << " (N=" << N << ")"
+                  << ", reps=" << reps
+                  << ", max_mcs=" << ((max_mcs > 0) ? std::to_string(max_mcs) : std::string("uncapped"))
+                  << ", threads=" << thread_count
+                  << "\n";
+
+        std::vector<RepRecord> records(reps);
+        auto run_rep = [&](int rep) {
             const uint64_t seed =
                 (base_seed ^ 0xA5A5A5A5A5A5A5A5ULL) + (uint64_t)rep * 1315423911ULL;
 
             RPS_Sim sim(g, seed, k);
             sim.init_random_uniform();
-            
-            /*
-            std::cout << "rep=" << rep
-              << " nR=" << sim.nR
-              << " nP=" << sim.nP
-              << " nS=" << sim.nS
-              << "\n";
-            */ // sanity check for initial randomization (maximum entropy)
 
-            SimResult res = sim.run_until_extinction(max_attempts);
+            RepRecord record;
+            record.seed = seed;
+            record.result = sim.run_until_extinction(max_attempts);
+            records[rep] = record;
+        };
+
+        std::vector<std::thread> workers;
+        workers.reserve(thread_count);
+        for (unsigned int t = 0; t < thread_count; ++t) {
+            workers.emplace_back([&, t]() {
+                for (int rep = static_cast<int>(t); rep < reps; rep += static_cast<int>(thread_count)) {
+                    run_rep(rep);
+                }
+            });
+        }
+        for (auto& worker : workers) worker.join();
+
+        for (int rep = 0; rep < reps; ++rep) {
+            const SimResult& res = records[rep].result;
             const int censored = (res.extinct == -1) ? 1 : 0;
-
             fout << g.name << ","
                  << outL << ","
                  << N << ","
@@ -142,8 +195,8 @@ int main(int argc, char** argv) {
                  << used_beta << ","
                  << k << ","
                  << rep << ","
-                 << seed << ","
-                 << MAX_MCS << ","
+                 << records[rep].seed << ","
+                 << max_mcs << ","
                  << censored << ","
                  << res.Text_attempts << ","
                  << res.Text_mcs << ","
