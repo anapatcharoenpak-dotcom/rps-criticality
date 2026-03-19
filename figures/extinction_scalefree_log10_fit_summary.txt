@@ -1,0 +1,50 @@
+Topology: Scale-free extinction time
+Subset: N=100
+Samples: 4000
+mean(log10 T_ext): 1.954590
+std(log10 T_ext): 0.426807
+Histogram-fit R^2 (Gaussian on log10 scale): 0.986660
+Q-Q correlation r: 0.999147
+Q-Q correlation R^2: 0.998295
+Skewness of log10(T_ext): -0.001747
+Excess kurtosis of log10(T_ext): -0.301972
+Jarque-Bera statistic: 15.199855
+Jarque-Bera p-value: 5.004876e-04
+Interpretation notes:
+- Histogram-fit R^2 close to 1 means the Gaussian curve follows the binned log10-data well.
+- Q-Q correlation R^2 close to 1 means the ordered log10-data closely follows a straight-line Gaussian Q-Q plot.
+- Jarque-Bera p-value is a normality diagnostic on log10(T_ext); small p-values argue against exact Gaussianity.
+
+Topology: Scale-free extinction time
+Subset: N=196
+Samples: 4000
+mean(log10 T_ext): 3.268764
+std(log10 T_ext): 0.576216
+Histogram-fit R^2 (Gaussian on log10 scale): 0.945735
+Q-Q correlation r: 0.990660
+Q-Q correlation R^2: 0.981407
+Skewness of log10(T_ext): -0.529658
+Excess kurtosis of log10(T_ext): 0.101066
+Jarque-Bera statistic: 188.727381
+Jarque-Bera p-value: 1.043206e-41
+Interpretation notes:
+- Histogram-fit R^2 close to 1 means the Gaussian curve follows the binned log10-data well.
+- Q-Q correlation R^2 close to 1 means the ordered log10-data closely follows a straight-line Gaussian Q-Q plot.
+- Jarque-Bera p-value is a normality diagnostic on log10(T_ext); small p-values argue against exact Gaussianity.
+
+Topology: Scale-free extinction time
+Subset: N=256
+Samples: 4000
+mean(log10 T_ext): 4.577974
+std(log10 T_ext): 0.767141
+Histogram-fit R^2 (Gaussian on log10 scale): 0.984871
+Q-Q correlation r: 0.998585
+Q-Q correlation R^2: 0.997172
+Skewness of log10(T_ext): -0.164142
+Excess kurtosis of log10(T_ext): 0.329680
+Jarque-Bera statistic: 36.076457
+Jarque-Bera p-value: 1.465875e-08
+Interpretation notes:
+- Histogram-fit R^2 close to 1 means the Gaussian curve follows the binned log10-data well.
+- Q-Q correlation R^2 close to 1 means the ordered log10-data closely follows a straight-line Gaussian Q-Q plot.
+- Jarque-Bera p-value is a normality diagnostic on log10(T_ext); small p-values argue against exact Gaussianity.
